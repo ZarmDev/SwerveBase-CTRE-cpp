@@ -1,0 +1,83 @@
+plugins {
+    id "cpp"
+    id "google-test-test-suite"
+    id "edu.wpi.first.GradleRIO" version "2025.2.1"
+}
+
+deploy {
+    targets {
+        roborio(getTargetTypeClass('RoboRIO')) {
+            team = project.frc.getTeamNumber()
+            debug = project.frc.getDebugOrDefault(false)
+
+            artifacts {
+                frcCpp(getArtifactTypeClass('FRCNativeArtifact')) {
+                }
+
+                frcStaticFileDeploy(getArtifactTypeClass('FileTreeArtifact')) {
+                    files = project.fileTree('src/main/deploy')
+                    directory = '/home/lvuser/deploy'
+                    deleteOldFiles = false
+                }
+            }
+        }
+    }
+}
+
+def deployArtifact = deploy.targets.roborio.artifacts.frcCpp
+
+def includeDesktopSupport = true
+
+//changed
+wpi.cpp.debugSimulation = true
+
+wpi.sim.addGui().defaultEnabled = true
+wpi.sim.addDriverstation()
+
+model {
+    components {
+        frcUserProgram(NativeExecutableSpec) {
+            targetPlatform wpi.platforms.roborio
+            if (includeDesktopSupport) {
+                targetPlatform wpi.platforms.desktop
+            }
+
+            sources.cpp {
+                source {
+                    srcDir 'src/main/cpp'
+                    include '**/*.cpp', '**/*.cc'
+                    exclude '**/lib/**', '**/Swerve.cpp/**', '**/Autos.cpp/**'
+                }
+                exportedHeaders {
+                    srcDir 'src/main/include'
+                }
+            }
+
+            deployArtifact.component = it
+
+            wpi.cpp.enableExternalTasks(it)
+
+            wpi.sim.enable(it)
+            wpi.cpp.vendor.cpp(it)
+            wpi.cpp.deps.wpilib(it) // This includes NetworkTables
+        }
+    }
+    testSuites {
+        frcUserProgramTest(GoogleTestTestSuiteSpec) {
+            testing $.components.frcUserProgram
+
+            sources.cpp {
+                source {
+                    srcDir 'src/test/cpp'
+                    include '**/*.cpp'
+                }
+            }
+
+            wpi.cpp.enableExternalTasks(it)
+
+            wpi.cpp.vendor.cpp(it)
+            wpi.cpp.deps.wpilib(it)
+            wpi.cpp.deps.googleTest(it)
+        }
+    }
+}
